@@ -1,0 +1,21 @@
+<resources>
+    <string name="app_name">Wingko Londo Kurir</string>
+    <string name="login_subtitle">Masuk ke akun kurir Anda</string>
+    <string name="hint_email">Email</string>
+    <string name="hint_password">Password</string>
+    <string name="btn_login">Masuk</string>
+    <string name="btn_logout">Keluar</string>
+    <string name="welcome">Selamat Datang,</string>
+    <string name="distribusi_title">Daftar Distribusi</string>
+    <string name="label_tanggal_kirim">Tanggal kirim:</string>
+    <string name="label_tanggal_pesanan">Tanggal pesanan:</string>
+    <string name="label_alamat">Alamat:</string>
+    <string name="label_no_hp">No. HP:</string>
+    <string name="label_catatan">Catatan:</string>
+    <string name="label_metode_bayar">Metode bayar:</string>
+    <string name="label_daftar_produk">Daftar Produk</string>
+    <string name="item_count_format">%d produk</string>
+    <string name="item_qty_format">%dx</string>
+    <string name="empty_distribusi">Belum ada data distribusi</string>
+    <string name="kurir">Nama</string>
+</resources>
