@@ -1,12 +1,15 @@
 package com.underdog.wingko.ui.home
 
+import android.content.Intent
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.net.Uri
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.core.graphics.toColorInt
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
@@ -15,10 +18,10 @@ import com.underdog.wingko.data.model.Distribusi
 import com.underdog.wingko.data.model.ItemProduk
 import com.underdog.wingko.databinding.ItemDistribusiBinding
 import java.text.NumberFormat
+import java.text.SimpleDateFormat
 import java.util.Locale
-import androidx.core.graphics.toColorInt
 
-class DistribusiAdapter :
+class DistribusiAdapter(private val onConfirmClick: (Distribusi) -> Unit) :
     ListAdapter<Distribusi, DistribusiAdapter.DistribusiViewHolder>(DistribusiDiffCallback()) {
 
     private val expandedIds = mutableSetOf<Int>()
@@ -33,21 +36,26 @@ class DistribusiAdapter :
     override fun onBindViewHolder(holder: DistribusiViewHolder, position: Int) {
         val item = getItem(position)
         val isExpanded = expandedIds.contains(item.id)
-        holder.bind(item, isExpanded) { id ->
+        holder.bind(item, isExpanded, { id ->
             if (expandedIds.contains(id)) {
                 expandedIds.remove(id)
             } else {
                 expandedIds.add(id)
             }
             notifyItemChanged(position)
-        }
+        }, onConfirmClick)
     }
 
     class DistribusiViewHolder(
         private val binding: ItemDistribusiBinding
     ) : RecyclerView.ViewHolder(binding.root) {
 
-        fun bind(distribusi: Distribusi, isExpanded: Boolean, onToggle: (Int) -> Unit) {
+        fun bind(
+            distribusi: Distribusi,
+            isExpanded: Boolean,
+            onToggle: (Int) -> Unit,
+            onConfirmClick: (Distribusi) -> Unit
+        ) {
             // === Header (selalu terlihat) ===
             binding.tvTokoName.text = distribusi.toko.nama
             binding.tvTanggalKirim.text = formatTanggal(distribusi.tanggalKirim)
@@ -75,11 +83,13 @@ class DistribusiAdapter :
 
             // === Detail (hanya diisi saat expanded) ===
             if (isExpanded) {
-                bindDetail(distribusi)
+                bindDetail(distribusi, onConfirmClick)
             }
         }
 
-        private fun bindDetail(distribusi: Distribusi) {
+        private fun bindDetail(distribusi: Distribusi, onConfirmClick: (Distribusi) -> Unit) {
+            val context = itemView.context
+            
             // Info Toko
             binding.tvAlamat.text = distribusi.toko.alamat
             binding.tvNoHp.text = distribusi.toko.noHp
@@ -98,6 +108,27 @@ class DistribusiAdapter :
 
             // Total
             binding.tvDetailTotalHarga.text = formatRupiah(distribusi.pesanan.totalHarga)
+            
+            // Map Button (jika ada koordinat)
+            if (distribusi.toko.latitude != null && distribusi.toko.longitude != null) {
+                binding.btnOpenMap.visibility = View.VISIBLE
+                binding.btnOpenMap.setOnClickListener {
+                    val gmmIntentUri = Uri.parse("geo:${distribusi.toko.latitude},${distribusi.toko.longitude}?q=${distribusi.toko.nama}")
+                    val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
+                    mapIntent.setPackage("com.google.android.apps.maps")
+                    context.startActivity(mapIntent)
+                }
+            } else {
+                binding.btnOpenMap.visibility = View.GONE
+            }
+
+            // Confirm Button (hanya jika status pending)
+            if (distribusi.statusPengiriman.lowercase() == "pending") {
+                binding.btnConfirmDelivered.visibility = View.VISIBLE
+                binding.btnConfirmDelivered.setOnClickListener { onConfirmClick(distribusi) }
+            } else {
+                binding.btnConfirmDelivered.visibility = View.GONE
+            }
         }
 
         private fun createItemRow(item: ItemProduk): View {
@@ -155,13 +186,10 @@ class DistribusiAdapter :
 
         private fun formatTanggal(dateStr: String): String {
             return try {
-                val parts = dateStr.split("-")
-                val months = arrayOf(
-                    "Jan", "Feb", "Mar", "Apr", "Mei", "Jun",
-                    "Jul", "Agt", "Sep", "Okt", "Nov", "Des"
-                )
-                val monthIndex = parts[1].toInt() - 1
-                "${parts[2]} ${months[monthIndex]} ${parts[0]}"
+                val inputFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                val outputFormat = SimpleDateFormat("dd MMMM yyyy", Locale("id", "ID"))
+                val date = inputFormat.parse(dateStr)
+                date?.let { outputFormat.format(it) } ?: dateStr
             } catch (e: Exception) {
                 dateStr
             }

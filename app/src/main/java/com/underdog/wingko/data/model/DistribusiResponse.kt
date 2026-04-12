@@ -23,7 +23,9 @@ data class Toko(
     val nama: String,
     val alamat: String,
     @SerializedName("no_hp")
-    val noHp: String
+    val noHp: String,
+    val latitude: String?,
+    val longitude: String?
 )
 
 data class Pesanan(
