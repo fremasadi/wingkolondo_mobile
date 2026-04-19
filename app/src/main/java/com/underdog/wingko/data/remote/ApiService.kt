@@ -15,6 +15,7 @@ interface ApiService {
     @GET("api/distribusi")
     suspend fun getDistribusi(
         @Header("Authorization") token: String,
+        @Query("status") status: String? = null,
         @Query("start_date") startDate: String? = null,
         @Query("end_date") endDate: String? = null,
         @Query("per_page") perPage: Int? = null,

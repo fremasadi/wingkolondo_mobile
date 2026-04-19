@@ -51,6 +51,10 @@ class HomeActivity : AppCompatActivity() {
     private var currentPhotoPath: String? = null
     private var selectedDistribusiId: Int? = null
 
+    private var selectedStatus: String? = null
+    private var startDate: String? = null
+    private var endDate: String? = null
+
     private val viewModel: HomeViewModel by viewModels {
         HomeViewModelFactory(SessionManager(this))
     }
@@ -221,15 +225,60 @@ class HomeActivity : AppCompatActivity() {
             showSettingsBottomSheet()
         }
 
-        binding.chipFilterDate.setOnClickListener {
-            showDateRangePicker()
+        binding.chipFilter.setOnClickListener {
+            showFilterOptionsDialog()
         }
 
         binding.btnClearFilter.setOnClickListener {
-            binding.chipFilterDate.text = "Filter Tanggal"
-            binding.btnClearFilter.visibility = View.GONE
-            viewModel.filterByDateRange(null, null)
+            resetFilters()
         }
+    }
+
+    private fun showFilterOptionsDialog() {
+        val options = arrayOf("Filter Status", "Filter Tanggal")
+        AlertDialog.Builder(this)
+            .setTitle("Pilih Filter")
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> showStatusFilterDialog()
+                    1 -> showDateRangePicker()
+                }
+            }
+            .show()
+    }
+
+    private fun showStatusFilterDialog() {
+        val statuses = arrayOf("Pending", "Dikirim", "Selesai", "Semua Status")
+        val statusValues = arrayOf("pending", "dikirim", "selesai", null)
+        
+        AlertDialog.Builder(this)
+            .setTitle("Pilih Status")
+            .setItems(statuses) { _, which ->
+                selectedStatus = statusValues[which]
+                updateFilterLabel()
+                viewModel.setFilter(selectedStatus, startDate, endDate)
+            }
+            .show()
+    }
+
+    private fun resetFilters() {
+        selectedStatus = null
+        startDate = null
+        endDate = null
+        binding.chipFilter.text = "Filter"
+        binding.btnClearFilter.visibility = View.GONE
+        viewModel.setFilter(null, null, null)
+    }
+
+    private fun updateFilterLabel() {
+        val label = when {
+            selectedStatus != null && startDate != null -> "${selectedStatus?.replaceFirstChar { it.uppercase() }} | Tanggal"
+            selectedStatus != null -> "Status: ${selectedStatus?.replaceFirstChar { it.uppercase() }}"
+            startDate != null -> "$startDate - $endDate"
+            else -> "Filter"
+        }
+        binding.chipFilter.text = label
+        binding.btnClearFilter.visibility = View.VISIBLE
     }
 
     private fun showSettingsBottomSheet() {
@@ -270,12 +319,11 @@ class HomeActivity : AppCompatActivity() {
             val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
             sdf.timeZone = TimeZone.getTimeZone("UTC")
             
-            val startDate = sdf.format(Date(selection.first))
-            val endDate = sdf.format(Date(selection.second))
+            startDate = sdf.format(Date(selection.first))
+            endDate = sdf.format(Date(selection.second))
             
-            binding.chipFilterDate.text = "$startDate - $endDate"
-            binding.btnClearFilter.visibility = View.VISIBLE
-            viewModel.filterByDateRange(startDate, endDate)
+            updateFilterLabel()
+            viewModel.setFilter(selectedStatus, startDate, endDate)
         }
 
         dateRangePicker.show(supportFragmentManager, "DATE_RANGE_PICKER")
@@ -308,7 +356,7 @@ class HomeActivity : AppCompatActivity() {
                     if (state.data.isEmpty()) {
                         binding.rvDistribusi.visibility = View.GONE
                         binding.layoutEmpty.visibility = View.VISIBLE
-                        binding.tvEmptyMessage.text = "Data untuk hari ini kosong"
+                        binding.tvEmptyMessage.text = "Data tidak ditemukan"
                     } else {
                         binding.rvDistribusi.visibility = View.VISIBLE
                         binding.layoutEmpty.visibility = View.GONE

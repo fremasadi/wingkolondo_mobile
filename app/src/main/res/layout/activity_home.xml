@@ -69,12 +69,12 @@
             android:textStyle="bold" />
 
         <com.google.android.material.chip.Chip
-            android:id="@+id/chipFilterDate"
+            android:id="@+id/chipFilter"
             style="@style/Widget.MaterialComponents.Chip.Action"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Filter Tanggal"
-            app:chipIcon="@android:drawable/ic_menu_my_calendar"
+            android:text="Filter"
+            app:chipIcon="@drawable/ic_filter"
             app:chipIconSize="18dp" />
 
         <ImageButton

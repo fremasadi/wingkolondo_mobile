@@ -41,6 +41,7 @@ class HomeViewModel(private val sessionManager: SessionManager) : ViewModel() {
     private var isLastPage = false
     private var startDate: String? = null
     private var endDate: String? = null
+    private var status: String? = null
 
     fun refreshDistribusi() {
         currentPage = 1
@@ -49,9 +50,10 @@ class HomeViewModel(private val sessionManager: SessionManager) : ViewModel() {
         loadDistribusi()
     }
 
-    fun filterByDateRange(start: String?, end: String?) {
-        startDate = start
-        endDate = end
+    fun setFilter(status: String?, start: String?, end: String?) {
+        this.status = status
+        this.startDate = start
+        this.endDate = end
         refreshDistribusi()
     }
 
@@ -78,6 +80,7 @@ class HomeViewModel(private val sessionManager: SessionManager) : ViewModel() {
 
                 val response = RetrofitClient.apiService.getDistribusi(
                     token = "Bearer $token",
+                    status = status,
                     startDate = startDate,
                     endDate = endDate,
                     perPage = 10,
