@@ -26,11 +26,13 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import com.google.android.material.bottomsheet.BottomSheetDialog
+import com.google.android.material.chip.Chip
 import com.google.android.material.datepicker.MaterialDatePicker
 import com.underdog.wingko.R
 import com.underdog.wingko.data.local.SessionManager
 import com.underdog.wingko.data.model.Distribusi
 import com.underdog.wingko.databinding.ActivityHomeBinding
+import com.underdog.wingko.databinding.BottomSheetFilterBinding
 import com.underdog.wingko.databinding.BottomSheetSettingsBinding
 import com.underdog.wingko.ui.login.LoginActivity
 import kotlinx.coroutines.flow.first
@@ -50,6 +52,10 @@ class HomeActivity : AppCompatActivity() {
 
     private var currentPhotoPath: String? = null
     private var selectedDistribusiId: Int? = null
+
+    private var tempStatus: String? = null
+    private var tempStartDate: String? = null
+    private var tempEndDate: String? = null
 
     private var selectedStatus: String? = null
     private var startDate: String? = null
@@ -226,7 +232,7 @@ class HomeActivity : AppCompatActivity() {
         }
 
         binding.chipFilter.setOnClickListener {
-            showFilterOptionsDialog()
+            showFilterBottomSheet()
         }
 
         binding.btnClearFilter.setOnClickListener {
@@ -234,31 +240,67 @@ class HomeActivity : AppCompatActivity() {
         }
     }
 
-    private fun showFilterOptionsDialog() {
-        val options = arrayOf("Filter Status", "Filter Tanggal")
-        AlertDialog.Builder(this)
-            .setTitle("Pilih Filter")
-            .setItems(options) { _, which ->
-                when (which) {
-                    0 -> showStatusFilterDialog()
-                    1 -> showDateRangePicker()
-                }
-            }
-            .show()
-    }
+    private fun showFilterBottomSheet() {
+        val dialog = BottomSheetDialog(this)
+        val filterBinding = BottomSheetFilterBinding.inflate(layoutInflater)
+        dialog.setContentView(filterBinding.root)
 
-    private fun showStatusFilterDialog() {
-        val statuses = arrayOf("Pending", "Dikirim", "Selesai", "Semua Status")
-        val statusValues = arrayOf("pending", "dikirim", "selesai", null)
-        
-        AlertDialog.Builder(this)
-            .setTitle("Pilih Status")
-            .setItems(statuses) { _, which ->
-                selectedStatus = statusValues[which]
-                updateFilterLabel()
-                viewModel.setFilter(selectedStatus, startDate, endDate)
+        // Set initial state from current filters
+        tempStatus = selectedStatus
+        tempStartDate = startDate
+        tempEndDate = endDate
+
+        // Restore status chip selection
+        when (tempStatus) {
+            "pending" -> filterBinding.chipPending.isChecked = true
+            "dikirim" -> filterBinding.chipDikirim.isChecked = true
+            "selesai" -> filterBinding.chipSelesai.isChecked = true
+            else -> filterBinding.chipAll.isChecked = true
+        }
+
+        // Restore date button text
+        if (tempStartDate != null) {
+            filterBinding.btnSelectDate.text = "$tempStartDate - $tempEndDate"
+        }
+
+        filterBinding.cgStatus.setOnCheckedStateChangeListener { group, checkedIds ->
+            val checkedId = checkedIds.firstOrNull()
+            tempStatus = when (checkedId) {
+                R.id.chipPending -> "pending"
+                R.id.chipDikirim -> "dikirim"
+                R.id.chipSelesai -> "selesai"
+                else -> null
             }
-            .show()
+        }
+
+        filterBinding.btnSelectDate.setOnClickListener {
+            val dateRangePicker = MaterialDatePicker.Builder.dateRangePicker()
+                .setTitleText("Pilih Rentang Tanggal")
+                .build()
+
+            dateRangePicker.addOnPositiveButtonClickListener { selection ->
+                val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                sdf.timeZone = TimeZone.getTimeZone("UTC")
+                
+                tempStartDate = sdf.format(Date(selection.first))
+                tempEndDate = sdf.format(Date(selection.second))
+                
+                filterBinding.btnSelectDate.text = "$tempStartDate - $tempEndDate"
+            }
+            dateRangePicker.show(supportFragmentManager, "DATE_RANGE_PICKER")
+        }
+
+        filterBinding.btnApplyFilter.setOnClickListener {
+            selectedStatus = tempStatus
+            startDate = tempStartDate
+            endDate = tempEndDate
+            
+            updateFilterLabel()
+            viewModel.setFilter(selectedStatus, startDate, endDate)
+            dialog.dismiss()
+        }
+
+        dialog.show()
     }
 
     private fun resetFilters() {
@@ -302,31 +344,6 @@ class HomeActivity : AppCompatActivity() {
             startActivity(intent)
             finish()
         }
-    }
-
-    private fun showDateRangePicker() {
-        val dateRangePicker = MaterialDatePicker.Builder.dateRangePicker()
-            .setTitleText("Pilih Rentang Tanggal")
-            .setSelection(
-                Pair(
-                    MaterialDatePicker.todayInUtcMilliseconds(),
-                    MaterialDatePicker.todayInUtcMilliseconds()
-                )
-            )
-            .build()
-
-        dateRangePicker.addOnPositiveButtonClickListener { selection ->
-            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-            sdf.timeZone = TimeZone.getTimeZone("UTC")
-            
-            startDate = sdf.format(Date(selection.first))
-            endDate = sdf.format(Date(selection.second))
-            
-            updateFilterLabel()
-            viewModel.setFilter(selectedStatus, startDate, endDate)
-        }
-
-        dateRangePicker.show(supportFragmentManager, "DATE_RANGE_PICKER")
     }
 
     private fun observeDistribusiState() {
