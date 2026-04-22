@@ -26,15 +26,20 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import com.google.android.material.bottomsheet.BottomSheetDialog
-import com.google.android.material.chip.Chip
 import com.google.android.material.datepicker.MaterialDatePicker
 import com.underdog.wingko.R
 import com.underdog.wingko.data.local.SessionManager
 import com.underdog.wingko.data.model.Distribusi
+import com.underdog.wingko.data.model.Retur
 import com.underdog.wingko.databinding.ActivityHomeBinding
 import com.underdog.wingko.databinding.BottomSheetFilterBinding
 import com.underdog.wingko.databinding.BottomSheetSettingsBinding
 import com.underdog.wingko.ui.login.LoginActivity
+import com.underdog.wingko.ui.retur.ReturActivity
+import com.underdog.wingko.ui.retur.ReturAdapter
+import com.underdog.wingko.ui.retur.ReturState
+import com.underdog.wingko.ui.retur.ReturViewModel
+import com.underdog.wingko.ui.retur.ReturViewModelFactory
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.io.File
@@ -48,14 +53,13 @@ class HomeActivity : AppCompatActivity() {
     private lateinit var binding: ActivityHomeBinding
     private lateinit var sessionManager: SessionManager
     private lateinit var distribusiAdapter: DistribusiAdapter
+    private lateinit var returHorizontalAdapter: ReturAdapter
     private lateinit var fusedLocationClient: FusedLocationProviderClient
 
     private var currentPhotoPath: String? = null
     private var selectedDistribusiId: Int? = null
-
-    private var tempStatus: String? = null
-    private var tempStartDate: String? = null
-    private var tempEndDate: String? = null
+    private var selectedReturId: Int? = null
+    private var isReturAction = false
 
     private var selectedStatus: String? = null
     private var startDate: String? = null
@@ -65,15 +69,17 @@ class HomeActivity : AppCompatActivity() {
         HomeViewModelFactory(SessionManager(this))
     }
 
+    private val returViewModel: ReturViewModel by viewModels {
+        ReturViewModelFactory(SessionManager(this))
+    }
+
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        if (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
-            permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (permissions[Manifest.permission.ACCESS_FINE_LOCATION] != true ||
+            permissions[Manifest.permission.CAMERA] != true
         ) {
-            // Permission granted
-        } else {
-            Toast.makeText(this, "Izin lokasi diperlukan untuk konfirmasi", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Izin lokasi dan kamera diperlukan", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -100,14 +106,14 @@ class HomeActivity : AppCompatActivity() {
         sessionManager = SessionManager(this)
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
-        setupRecyclerView()
+        setupRecyclerViews()
         setupSwipeRefresh()
         loadUserData()
         setupClickListeners()
-        observeDistribusiState()
+        observeState()
 
         checkPermissions()
-        viewModel.refreshDistribusi()
+        viewModel.refreshData()
     }
 
     private fun checkPermissions() {
@@ -119,34 +125,25 @@ class HomeActivity : AppCompatActivity() {
         requestPermissionLauncher.launch(permissions)
     }
 
-    private fun setupRecyclerView() {
+    private fun setupRecyclerViews() {
+        // Distribusi Adapter
         distribusiAdapter = DistribusiAdapter { distribusi ->
-            handleConfirmDelivered(distribusi)
+            isReturAction = false
+            selectedDistribusiId = distribusi.id
+            dispatchTakePictureIntent()
         }
-        binding.rvDistribusi.apply {
-            adapter = distribusiAdapter
-            addOnScrollListener(object : RecyclerView.OnScrollListener() {
-                override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                    super.onScrolled(recyclerView, dx, dy)
-                    val layoutManager = recyclerView.layoutManager as LinearLayoutManager
-                    val visibleItemCount = layoutManager.childCount
-                    val totalItemCount = layoutManager.itemCount
-                    val firstVisibleItemPosition = layoutManager.findFirstVisibleItemPosition()
+        binding.rvDistribusi.adapter = distribusiAdapter
 
-                    if ((visibleItemCount + firstVisibleItemPosition) >= totalItemCount
-                        && firstVisibleItemPosition >= 0
-                        && dy > 0
-                    ) {
-                        viewModel.loadNextPage()
-                    }
-                }
-            })
+        // Retur Horizontal Adapter
+        returHorizontalAdapter = ReturAdapter { retur ->
+            isReturAction = true
+            selectedReturId = retur.id
+            dispatchTakePictureIntent()
         }
-    }
-
-    private fun handleConfirmDelivered(distribusi: Distribusi) {
-        selectedDistribusiId = distribusi.id
-        dispatchTakePictureIntent()
+        binding.rvReturHorizontal.apply {
+            adapter = returHorizontalAdapter
+            layoutManager = LinearLayoutManager(this@HomeActivity, LinearLayoutManager.HORIZONTAL, false)
+        }
     }
 
     private fun dispatchTakePictureIntent() {
@@ -169,9 +166,10 @@ class HomeActivity : AppCompatActivity() {
     }
 
     private fun createImageFile(): File {
+        val prefix = if (isReturAction) "RETUR_" else "DIST_"
         val timeStamp: String = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
         val storageDir: File? = getExternalFilesDir(Environment.DIRECTORY_PICTURES)
-        return File.createTempFile("JPEG_${timeStamp}_", ".jpg", storageDir).apply {
+        return File.createTempFile("${prefix}${timeStamp}_", ".jpg", storageDir).apply {
             currentPhotoPath = absolutePath
         }
     }
@@ -181,7 +179,7 @@ class HomeActivity : AppCompatActivity() {
         editText.hint = "Catatan (opsional)"
         
         AlertDialog.Builder(this)
-            .setTitle("Konfirmasi Selesai")
+            .setTitle(if (isReturAction) "Konfirmasi Pickup Retur" else "Konfirmasi Selesai Distribusi")
             .setMessage("Tambahkan catatan jika diperlukan")
             .setView(editText)
             .setPositiveButton("Kirim") { _, _ ->
@@ -198,24 +196,25 @@ class HomeActivity : AppCompatActivity() {
         }
 
         fusedLocationClient.lastLocation.addOnSuccessListener { location ->
-            if (location != null && currentPhotoPath != null && selectedDistribusiId != null) {
-                viewModel.confirmDelivered(
-                    selectedDistribusiId!!,
-                    location.latitude,
-                    location.longitude,
-                    File(currentPhotoPath!!),
-                    catatan
-                )
+            if (location != null && currentPhotoPath != null) {
+                if (isReturAction) {
+                    selectedReturId?.let {
+                        returViewModel.confirmPickup(it, location.latitude, location.longitude, File(currentPhotoPath!!), catatan)
+                    }
+                } else {
+                    selectedDistribusiId?.let {
+                        viewModel.confirmDelivered(it, location.latitude, location.longitude, File(currentPhotoPath!!), catatan)
+                    }
+                }
             } else {
-                Toast.makeText(this, "Gagal mendapatkan lokasi. Pastikan GPS aktif.", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "Gagal mendapatkan lokasi", Toast.LENGTH_SHORT).show()
             }
         }
     }
 
     private fun setupSwipeRefresh() {
-        binding.swipeRefresh.setColorSchemeResources(R.color.primary)
         binding.swipeRefresh.setOnRefreshListener {
-            viewModel.refreshDistribusi()
+            viewModel.refreshData()
         }
     }
 
@@ -227,17 +226,10 @@ class HomeActivity : AppCompatActivity() {
     }
 
     private fun setupClickListeners() {
-        binding.btnSettings.setOnClickListener {
-            showSettingsBottomSheet()
-        }
+        binding.btnSettings.setOnClickListener { showSettingsBottomSheet() }
+        binding.chipFilter.setOnClickListener { showFilterBottomSheet() }
+        binding.btnClearFilter.setOnClickListener { resetFilters() }
 
-        binding.chipFilter.setOnClickListener {
-            showFilterBottomSheet()
-        }
-
-        binding.btnClearFilter.setOnClickListener {
-            resetFilters()
-        }
     }
 
     private fun showFilterBottomSheet() {
@@ -245,27 +237,20 @@ class HomeActivity : AppCompatActivity() {
         val filterBinding = BottomSheetFilterBinding.inflate(layoutInflater)
         dialog.setContentView(filterBinding.root)
 
-        // Set initial state from current filters
-        tempStatus = selectedStatus
-        tempStartDate = startDate
-        tempEndDate = endDate
+        var tempStatus = selectedStatus
+        var tempStart = startDate
+        var tempEnd = endDate
 
-        // Restore status chip selection
         when (tempStatus) {
             "pending" -> filterBinding.chipPending.isChecked = true
             "dikirim" -> filterBinding.chipDikirim.isChecked = true
             "selesai" -> filterBinding.chipSelesai.isChecked = true
             else -> filterBinding.chipAll.isChecked = true
         }
+        if (tempStart != null) filterBinding.btnSelectDate.text = "$tempStart - $tempEnd"
 
-        // Restore date button text
-        if (tempStartDate != null) {
-            filterBinding.btnSelectDate.text = "$tempStartDate - $tempEndDate"
-        }
-
-        filterBinding.cgStatus.setOnCheckedStateChangeListener { group, checkedIds ->
-            val checkedId = checkedIds.firstOrNull()
-            tempStatus = when (checkedId) {
+        filterBinding.cgStatus.setOnCheckedStateChangeListener { _, checkedIds ->
+            tempStatus = when (checkedIds.firstOrNull()) {
                 R.id.chipPending -> "pending"
                 R.id.chipDikirim -> "dikirim"
                 R.id.chipSelesai -> "selesai"
@@ -274,33 +259,36 @@ class HomeActivity : AppCompatActivity() {
         }
 
         filterBinding.btnSelectDate.setOnClickListener {
-            val dateRangePicker = MaterialDatePicker.Builder.dateRangePicker()
-                .setTitleText("Pilih Rentang Tanggal")
-                .build()
-
-            dateRangePicker.addOnPositiveButtonClickListener { selection ->
-                val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-                sdf.timeZone = TimeZone.getTimeZone("UTC")
-                
-                tempStartDate = sdf.format(Date(selection.first))
-                tempEndDate = sdf.format(Date(selection.second))
-                
-                filterBinding.btnSelectDate.text = "$tempStartDate - $tempEndDate"
+            val picker = MaterialDatePicker.Builder.dateRangePicker().build()
+            picker.addOnPositiveButtonClickListener { selection ->
+                val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).apply { timeZone = TimeZone.getTimeZone("UTC") }
+                tempStart = sdf.format(Date(selection.first))
+                tempEnd = sdf.format(Date(selection.second))
+                filterBinding.btnSelectDate.text = "$tempStart - $tempEnd"
             }
-            dateRangePicker.show(supportFragmentManager, "DATE_RANGE_PICKER")
+            picker.show(supportFragmentManager, "DATE_PICKER")
         }
 
         filterBinding.btnApplyFilter.setOnClickListener {
             selectedStatus = tempStatus
-            startDate = tempStartDate
-            endDate = tempEndDate
-            
+            startDate = tempStart
+            endDate = tempEnd
             updateFilterLabel()
             viewModel.setFilter(selectedStatus, startDate, endDate)
             dialog.dismiss()
         }
-
         dialog.show()
+    }
+
+    private fun updateFilterLabel() {
+        val label = when {
+            selectedStatus != null && startDate != null -> "${selectedStatus?.uppercase()} | Tanggal"
+            selectedStatus != null -> "Status: ${selectedStatus?.uppercase()}"
+            startDate != null -> "$startDate - $endDate"
+            else -> "Filter"
+        }
+        binding.chipFilter.text = label
+        binding.btnClearFilter.visibility = if (label == "Filter") View.GONE else View.VISIBLE
     }
 
     private fun resetFilters() {
@@ -312,27 +300,64 @@ class HomeActivity : AppCompatActivity() {
         viewModel.setFilter(null, null, null)
     }
 
-    private fun updateFilterLabel() {
-        val label = when {
-            selectedStatus != null && startDate != null -> "${selectedStatus?.replaceFirstChar { it.uppercase() }} | Tanggal"
-            selectedStatus != null -> "Status: ${selectedStatus?.replaceFirstChar { it.uppercase() }}"
-            startDate != null -> "$startDate - $endDate"
-            else -> "Filter"
+    private fun observeState() {
+        viewModel.homeState.observe(this) { state ->
+            when (state) {
+                is HomeState.Loading -> {
+                    if (!binding.swipeRefresh.isRefreshing) binding.progressBar.visibility = View.VISIBLE
+                }
+                is HomeState.Success -> {
+                    binding.progressBar.visibility = View.GONE
+                    binding.swipeRefresh.isRefreshing = false
+                    
+                    // Update Retur Section
+                    if (state.retur.isNotEmpty()) {
+                        binding.rvReturHorizontal.visibility = View.VISIBLE
+                        binding.tvEmptyRetur.visibility = View.GONE
+                        returHorizontalAdapter.submitList(state.retur)
+                    } else {
+                        binding.rvReturHorizontal.visibility = View.GONE
+                        binding.tvEmptyRetur.visibility = View.VISIBLE
+                    }
+
+                    // Update Distribusi Section
+                    distribusiAdapter.submitList(state.distribusi)
+                    binding.layoutEmpty.visibility = if (state.distribusi.isEmpty()) View.VISIBLE else View.GONE
+                }
+                is HomeState.Error -> {
+                    binding.progressBar.visibility = View.GONE
+                    binding.swipeRefresh.isRefreshing = false
+                    Toast.makeText(this, state.message, Toast.LENGTH_SHORT).show()
+                }
+                is HomeState.ConfirmSuccess -> {
+                    Toast.makeText(this, "Konfirmasi berhasil", Toast.LENGTH_SHORT).show()
+                }
+                else -> {}
+            }
         }
-        binding.chipFilter.text = label
-        binding.btnClearFilter.visibility = View.VISIBLE
+
+        returViewModel.returState.observe(this) { state ->
+            if (state is ReturState.ConfirmSuccess) {
+                Toast.makeText(this, "Pickup retur berhasil", Toast.LENGTH_SHORT).show()
+                viewModel.refreshData()
+            } else if (state is ReturState.Error) {
+                Toast.makeText(this, state.message, Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     private fun showSettingsBottomSheet() {
         val dialog = BottomSheetDialog(this)
-        val bottomSheetBinding = BottomSheetSettingsBinding.inflate(layoutInflater)
-        dialog.setContentView(bottomSheetBinding.root)
-
-        bottomSheetBinding.btnMenuLogout.setOnClickListener {
+        val bsBinding = BottomSheetSettingsBinding.inflate(layoutInflater)
+        dialog.setContentView(bsBinding.root)
+        bsBinding.btnMenuRetur.setOnClickListener {
+            dialog.dismiss()
+            startActivity(Intent(this, ReturActivity::class.java))
+        }
+        bsBinding.btnMenuLogout.setOnClickListener {
             dialog.dismiss()
             logout()
         }
-
         dialog.show()
     }
 
@@ -343,64 +368,6 @@ class HomeActivity : AppCompatActivity() {
             intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             startActivity(intent)
             finish()
-        }
-    }
-
-    private fun observeDistribusiState() {
-        viewModel.distribusiState.observe(this) { state ->
-            when (state) {
-                is DistribusiState.Idle -> { /* no-op */ }
-
-                is DistribusiState.Loading -> {
-                    if (!binding.swipeRefresh.isRefreshing) {
-                        binding.progressBar.visibility = View.VISIBLE
-                    }
-                    binding.rvDistribusi.visibility = View.GONE
-                    binding.layoutEmpty.visibility = View.GONE
-                    binding.tvStateMessage.visibility = View.GONE
-                    binding.progressBarLoadMore.visibility = View.GONE
-                }
-
-                is DistribusiState.LoadingNextPage -> {
-                    binding.progressBarLoadMore.visibility = View.VISIBLE
-                }
-
-                is DistribusiState.Success -> {
-                    binding.swipeRefresh.isRefreshing = false
-                    binding.progressBar.visibility = View.GONE
-                    binding.progressBarLoadMore.visibility = View.GONE
-                    
-                    if (state.data.isEmpty()) {
-                        binding.rvDistribusi.visibility = View.GONE
-                        binding.layoutEmpty.visibility = View.VISIBLE
-                        binding.tvEmptyMessage.text = "Data tidak ditemukan"
-                    } else {
-                        binding.rvDistribusi.visibility = View.VISIBLE
-                        binding.layoutEmpty.visibility = View.GONE
-                        binding.tvStateMessage.visibility = View.GONE
-                        distribusiAdapter.submitList(state.data)
-                    }
-                }
-
-                is DistribusiState.ConfirmSuccess -> {
-                    Toast.makeText(this, "Distribusi berhasil dikonfirmasi", Toast.LENGTH_SHORT).show()
-                }
-
-                is DistribusiState.Error -> {
-                    binding.swipeRefresh.isRefreshing = false
-                    binding.progressBar.visibility = View.GONE
-                    binding.progressBarLoadMore.visibility = View.GONE
-                    binding.layoutEmpty.visibility = View.GONE
-                    
-                    Toast.makeText(this, state.message, Toast.LENGTH_LONG).show()
-                    
-                    if (distribusiAdapter.itemCount == 0) {
-                        binding.rvDistribusi.visibility = View.GONE
-                        binding.tvStateMessage.visibility = View.VISIBLE
-                        binding.tvStateMessage.text = state.message
-                    }
-                }
-            }
         }
     }
 }

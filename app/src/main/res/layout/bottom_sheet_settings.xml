@@ -3,25 +3,28 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@color/white"
     android:orientation="vertical"
-    android:padding="24dp">
-
-    <View
-        android:layout_width="40dp"
-        android:layout_height="4dp"
-        android:layout_gravity="center"
-        android:layout_marginBottom="24dp"
-        android:background="#E0E0E0" />
+    android:padding="16dp">
 
     <TextView
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginBottom="16dp"
-        android:text="Pengaturan"
+        android:text="Menu"
         android:textColor="@color/text_primary"
         android:textSize="18sp"
         android:textStyle="bold" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnMenuRetur"
+        style="@style/Widget.MaterialComponents.Button.TextButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="start|center_vertical"
+        android:text="Tugas Retur"
+        android:textColor="@color/text_primary"
+        app:icon="@drawable/ic_filter"
+        app:iconTint="@color/primary" />
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btnMenuLogout"
@@ -29,11 +32,9 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="start|center_vertical"
-        android:text="@string/btn_logout"
-        android:textColor="@color/error"
+        android:text="Keluar"
+        android:textColor="#F44336"
         app:icon="@android:drawable/ic_lock_power_off"
-        app:iconPadding="16dp"
-        app:iconSize="24dp"
-        app:iconTint="@color/error" />
+        app:iconTint="#F44336" />
 
 </LinearLayout>
