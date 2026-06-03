@@ -21,8 +21,10 @@ import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class DistribusiAdapter(private val onConfirmClick: (Distribusi) -> Unit) :
-    ListAdapter<Distribusi, DistribusiAdapter.DistribusiViewHolder>(DistribusiDiffCallback()) {
+class DistribusiAdapter(
+    private val onMarkAsDikirim: (Distribusi) -> Unit,
+    private val onConfirmDelivered: (Distribusi) -> Unit
+) : ListAdapter<Distribusi, DistribusiAdapter.DistribusiViewHolder>(DistribusiDiffCallback()) {
 
     private val expandedIds = mutableSetOf<Int>()
 
@@ -43,7 +45,7 @@ class DistribusiAdapter(private val onConfirmClick: (Distribusi) -> Unit) :
                 expandedIds.add(id)
             }
             notifyItemChanged(position)
-        }, onConfirmClick)
+        }, onMarkAsDikirim, onConfirmDelivered)
     }
 
     class DistribusiViewHolder(
@@ -54,9 +56,9 @@ class DistribusiAdapter(private val onConfirmClick: (Distribusi) -> Unit) :
             distribusi: Distribusi,
             isExpanded: Boolean,
             onToggle: (Int) -> Unit,
-            onConfirmClick: (Distribusi) -> Unit
+            onMarkAsDikirim: (Distribusi) -> Unit,
+            onConfirmDelivered: (Distribusi) -> Unit
         ) {
-            // === Header (selalu terlihat) ===
             binding.tvTokoName.text = distribusi.toko.nama
             binding.tvTanggalKirim.text = formatTanggal(distribusi.tanggalKirim)
             binding.tvTotalHarga.text = formatRupiah(distribusi.pesanan.totalHarga)
@@ -65,7 +67,6 @@ class DistribusiAdapter(private val onConfirmClick: (Distribusi) -> Unit) :
                 R.string.item_count_format, distribusi.items.size
             )
 
-            // Status badge
             binding.tvStatus.text = distribusi.statusPengiriman.replaceFirstChar { it.uppercase() }
             val (bgColor, textColor) = getStatusColors(distribusi.statusPengiriman)
             binding.tvStatus.background = GradientDrawable().apply {
@@ -74,42 +75,38 @@ class DistribusiAdapter(private val onConfirmClick: (Distribusi) -> Unit) :
             }
             binding.tvStatus.setTextColor(textColor)
 
-            // Expand/collapse state
             binding.layoutDetail.visibility = if (isExpanded) View.VISIBLE else View.GONE
             binding.ivExpandIcon.rotation = if (isExpanded) 180f else 0f
 
-            // Click to toggle
             binding.layoutHeader.setOnClickListener { onToggle(distribusi.id) }
 
-            // === Detail (hanya diisi saat expanded) ===
             if (isExpanded) {
-                bindDetail(distribusi, onConfirmClick)
+                bindDetail(distribusi, onMarkAsDikirim, onConfirmDelivered)
             }
         }
 
-        private fun bindDetail(distribusi: Distribusi, onConfirmClick: (Distribusi) -> Unit) {
+        private fun bindDetail(
+            distribusi: Distribusi,
+            onMarkAsDikirim: (Distribusi) -> Unit,
+            onConfirmDelivered: (Distribusi) -> Unit
+        ) {
             val context = itemView.context
             
-            // Info Toko
             binding.tvAlamat.text = distribusi.toko.alamat
             binding.tvNoHp.text = distribusi.toko.noHp
             binding.tvCatatan.text = distribusi.catatan ?: "-"
 
-            // Info Pesanan
             binding.tvTanggalPesanan.text = formatTanggal(distribusi.pesanan.tanggalPesanan)
             binding.tvMetodeBayar.text =
                 distribusi.pesanan.metodePembayaran.replaceFirstChar { it.uppercase() }
 
-            // Daftar Produk
             binding.layoutItems.removeAllViews()
             for (item in distribusi.items) {
                 binding.layoutItems.addView(createItemRow(item))
             }
 
-            // Total
             binding.tvDetailTotalHarga.text = formatRupiah(distribusi.pesanan.totalHarga)
             
-            // Map Button (jika ada koordinat)
             if (distribusi.toko.latitude != null && distribusi.toko.longitude != null) {
                 binding.btnOpenMap.visibility = View.VISIBLE
                 binding.btnOpenMap.setOnClickListener {
@@ -122,12 +119,21 @@ class DistribusiAdapter(private val onConfirmClick: (Distribusi) -> Unit) :
                 binding.btnOpenMap.visibility = View.GONE
             }
 
-            // Confirm Button (hanya jika status pending)
-            if (distribusi.statusPengiriman.lowercase() == "pending") {
-                binding.btnConfirmDelivered.visibility = View.VISIBLE
-                binding.btnConfirmDelivered.setOnClickListener { onConfirmClick(distribusi) }
-            } else {
-                binding.btnConfirmDelivered.visibility = View.GONE
+            // Button logic
+            when (distribusi.statusPengiriman.lowercase()) {
+                "pending" -> {
+                    binding.btnConfirmDelivered.visibility = View.VISIBLE
+                    binding.btnConfirmDelivered.text = "Kirim Pesanan"
+                    binding.btnConfirmDelivered.setOnClickListener { onMarkAsDikirim(distribusi) }
+                }
+                "dikirim" -> {
+                    binding.btnConfirmDelivered.visibility = View.VISIBLE
+                    binding.btnConfirmDelivered.text = "Konfirmasi Selesai"
+                    binding.btnConfirmDelivered.setOnClickListener { onConfirmDelivered(distribusi) }
+                }
+                else -> {
+                    binding.btnConfirmDelivered.visibility = View.GONE
+                }
             }
         }
 
@@ -160,7 +166,7 @@ class DistribusiAdapter(private val onConfirmClick: (Distribusi) -> Unit) :
                 ).apply {
                     marginStart = (8 * dp).toInt()
                 }
-                text = context.getString(R.string.item_qty_format, item.qty)
+                text = context.getString(R.string.item_count_format, item.qty).replace(" produk", "x")
                 setTextColor(context.getColor(R.color.text_secondary))
                 textSize = 13f
             }

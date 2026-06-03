@@ -126,12 +126,17 @@ class HomeActivity : AppCompatActivity() {
     }
 
     private fun setupRecyclerViews() {
-        // Distribusi Adapter
-        distribusiAdapter = DistribusiAdapter { distribusi ->
-            isReturAction = false
-            selectedDistribusiId = distribusi.id
-            dispatchTakePictureIntent()
-        }
+        // Distribusi Adapter dengan flow baru: Pending -> Mark as Dikirim, Dikirim -> Confirm Delivered
+        distribusiAdapter = DistribusiAdapter(
+            onMarkAsDikirim = { distribusi ->
+                viewModel.markAsDikirim(distribusi.id)
+            },
+            onConfirmDelivered = { distribusi ->
+                isReturAction = false
+                selectedDistribusiId = distribusi.id
+                dispatchTakePictureIntent()
+            }
+        )
         binding.rvDistribusi.adapter = distribusiAdapter
 
         // Retur Horizontal Adapter

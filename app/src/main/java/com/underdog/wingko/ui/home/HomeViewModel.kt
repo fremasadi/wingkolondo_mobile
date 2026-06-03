@@ -43,7 +43,6 @@ class HomeViewModel(private val sessionManager: SessionManager) : ViewModel() {
     private var currentPage = 1
     private var isLastPage = false
     
-    // Parameter filter untuk Distribusi
     private var startDate: String? = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
     private var endDate: String? = "2030-12-31" 
     private var status: String? = null
@@ -81,12 +80,10 @@ class HomeViewModel(private val sessionManager: SessionManager) : ViewModel() {
                     return@launch
                 }
 
-                // Fetch Retur - Selalu ambil dari "Hari Ini" ke depan, tidak terpengaruh filter Distribusi
                 if (currentPage == 1) {
                     val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
                     val futureEnd = "2030-12-31"
                     
-                    Log.d("HomeViewModel", "Fetching Retur horizontal (always today onwards): $today to $futureEnd")
                     val returResponse = RetrofitClient.apiService.getRetur(
                         token = "Bearer $token",
                         startDate = today,
@@ -95,14 +92,9 @@ class HomeViewModel(private val sessionManager: SessionManager) : ViewModel() {
                     )
                     if (returResponse.isSuccessful) {
                         allRetur = returResponse.body()?.data ?: emptyList()
-                        Log.d("HomeViewModel", "Retur fetch success, count: ${allRetur.size}")
-                    } else {
-                        Log.e("HomeViewModel", "Retur fetch failed: ${returResponse.code()}")
                     }
                 }
 
-                // Fetch Distribusi - Menggunakan parameter filter (startDate & endDate)
-                Log.d("HomeViewModel", "Fetching Distribusi with filter: $startDate to $endDate")
                 val response = RetrofitClient.apiService.getDistribusi(
                     token = "Bearer $token",
                     status = status,
@@ -128,8 +120,31 @@ class HomeViewModel(private val sessionManager: SessionManager) : ViewModel() {
                     _homeState.value = HomeState.Error("Gagal memuat data: $errorMsg")
                 }
             } catch (e: Exception) {
-                Log.e("HomeViewModel", "Error fetching data", e)
                 _homeState.value = HomeState.Error("Gagal terhubung ke server")
+            }
+        }
+    }
+
+    fun markAsDikirim(id: Int) {
+        _homeState.value = HomeState.Loading
+        viewModelScope.launch {
+            try {
+                val token = sessionManager.getToken()
+                if (token.isNullOrEmpty()) {
+                    _homeState.value = HomeState.Error("Sesi telah berakhir")
+                    return@launch
+                }
+
+                val response = RetrofitClient.apiService.markAsDikirim("Bearer $token", id)
+
+                if (response.isSuccessful) {
+                    refreshData()
+                } else {
+                    val errorMsg = response.errorBody()?.string() ?: response.message()
+                    _homeState.value = HomeState.Error("Gagal update status: $errorMsg")
+                }
+            } catch (e: Exception) {
+                _homeState.value = HomeState.Error("Terjadi kesalahan: ${e.message}")
             }
         }
     }

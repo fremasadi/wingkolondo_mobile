@@ -23,6 +23,12 @@ interface ApiService {
         @Query("page") page: Int? = null
     ): Response<DistribusiResponse>
 
+    @POST("api/distribusi/{id}/mark-as-dikirim")
+    suspend fun markAsDikirim(
+        @Header("Authorization") token: String,
+        @Path("id") id: Int
+    ): Response<Unit>
+
     @Multipart
     @POST("api/distribusi/{id}/confirm-delivered")
     suspend fun confirmDelivered(
