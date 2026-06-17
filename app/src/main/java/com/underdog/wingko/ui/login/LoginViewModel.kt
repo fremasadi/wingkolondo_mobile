@@ -20,7 +20,7 @@ class LoginViewModel : ViewModel() {
     private val _loginState = MutableLiveData<LoginState>(LoginState.Idle)
     val loginState: LiveData<LoginState> = _loginState
 
-    fun login(email: String, password: String) {
+    fun login(email: String, password: String, fcmToken: String? = null) {
         if (email.isBlank() || password.isBlank()) {
             _loginState.value = LoginState.Error("Email dan password harus diisi")
             return
@@ -30,7 +30,7 @@ class LoginViewModel : ViewModel() {
 
         viewModelScope.launch {
             try {
-                val response = RetrofitClient.apiService.login(LoginRequest(email, password))
+                val response = RetrofitClient.apiService.login(LoginRequest(email, password, fcmToken))
                 if (response.isSuccessful && response.body() != null) {
                     _loginState.value = LoginState.Success(response.body()!!)
                 } else {
