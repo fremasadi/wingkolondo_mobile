@@ -31,6 +31,7 @@ sealed class HomeState {
     data class Success(val distribusi: List<Distribusi>, val retur: List<Retur>, val isEnd: Boolean) : HomeState()
     data class Error(val message: String) : HomeState()
     data object ConfirmSuccess : HomeState()
+    data object LogoutSuccess : HomeState()
 }
 
 class HomeViewModel(private val sessionManager: SessionManager) : ViewModel() {
@@ -145,6 +146,37 @@ class HomeViewModel(private val sessionManager: SessionManager) : ViewModel() {
                 }
             } catch (e: Exception) {
                 _homeState.value = HomeState.Error("Terjadi kesalahan: ${e.message}")
+            }
+        }
+    }
+
+    fun logout() {
+        _homeState.value = HomeState.Loading
+        viewModelScope.launch {
+            try {
+                val token = sessionManager.getToken()
+                if (token.isNullOrEmpty()) {
+                    // Jika token sudah tidak ada, anggap logout sukses secara lokal
+                    sessionManager.clearSession()
+                    _homeState.value = HomeState.LogoutSuccess
+                    return@launch
+                }
+
+                val response = RetrofitClient.apiService.logout("Bearer $token")
+                
+                // Apapun hasil dari server (sukses/gagal), kita bersihkan session lokal
+                sessionManager.clearSession()
+                
+                if (response.isSuccessful) {
+                    _homeState.value = HomeState.LogoutSuccess
+                } else {
+                    // Walaupun gagal di server (misal token expired), kita tetap pindah ke Login
+                    _homeState.value = HomeState.LogoutSuccess
+                }
+            } catch (e: Exception) {
+                // Jika error network, tetap hapus session lokal agar user bisa login ulang
+                sessionManager.clearSession()
+                _homeState.value = HomeState.LogoutSuccess
             }
         }
     }

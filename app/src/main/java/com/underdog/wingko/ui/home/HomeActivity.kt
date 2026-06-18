@@ -337,6 +337,9 @@ class HomeActivity : AppCompatActivity() {
                 is HomeState.ConfirmSuccess -> {
                     Toast.makeText(this, "Konfirmasi berhasil", Toast.LENGTH_SHORT).show()
                 }
+                is HomeState.LogoutSuccess -> {
+                    navigateToLogin()
+                }
                 else -> {}
             }
         }
@@ -351,6 +354,13 @@ class HomeActivity : AppCompatActivity() {
         }
     }
 
+    private fun navigateToLogin() {
+        val intent = Intent(this, LoginActivity::class.java)
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        startActivity(intent)
+        finish()
+    }
+
     private fun showSettingsBottomSheet() {
         val dialog = BottomSheetDialog(this)
         val bsBinding = BottomSheetSettingsBinding.inflate(layoutInflater)
@@ -361,18 +371,8 @@ class HomeActivity : AppCompatActivity() {
         }
         bsBinding.btnMenuLogout.setOnClickListener {
             dialog.dismiss()
-            logout()
+            viewModel.logout()
         }
         dialog.show()
-    }
-
-    private fun logout() {
-        lifecycleScope.launch {
-            sessionManager.clearSession()
-            val intent = Intent(this@HomeActivity, LoginActivity::class.java)
-            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-            startActivity(intent)
-            finish()
-        }
     }
 }

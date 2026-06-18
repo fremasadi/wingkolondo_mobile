@@ -1,5 +1,6 @@
 package com.underdog.wingko.ui.login
 
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -15,6 +16,8 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
+import com.google.android.gms.common.ConnectionResult
+import com.google.android.gms.common.GoogleApiAvailability
 import com.google.firebase.messaging.FirebaseMessaging
 import com.underdog.wingko.data.local.SessionManager
 import com.underdog.wingko.databinding.ActivityLoginBinding
@@ -74,14 +77,50 @@ class LoginActivity : AppCompatActivity() {
         }
     }
 
+    private fun checkGooglePlayServices(): Boolean {
+        val availability = GoogleApiAvailability.getInstance()
+        val resultCode = availability.isGooglePlayServicesAvailable(this)
+        if (resultCode != ConnectionResult.SUCCESS) {
+            if (availability.isUserResolvableError(resultCode)) {
+                availability.getErrorDialog(this, resultCode, 9000)?.show()
+            } else {
+                Toast.makeText(this, "Perangkat ini tidak mendukung Google Play Services", Toast.LENGTH_LONG).show()
+            }
+            return false
+        }
+        return true
+    }
+
     private fun setupClickListeners() {
         binding.btnLogin.setOnClickListener {
             val email = binding.etEmail.text.toString().trim()
             val password = binding.etPassword.text.toString().trim()
             
+            if (email.isEmpty() || password.isEmpty()) {
+                Toast.makeText(this, "Email dan password harus diisi", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            if (!checkGooglePlayServices()) {
+                // Tetap izinkan login tanpa FCM jika perlu, atau stop di sini
+                Log.w("LoginActivity", "Login without FCM because Play Services is not available")
+            }
+
+            setLoading(true)
+
+            // Ambil token yang mungkin sudah tersimpan di SharedPreferences
+            val sharedPref = getSharedPreferences("fcm_prefs", Context.MODE_PRIVATE)
+            val savedToken = sharedPref.getString("fcm_token", null)
+
             FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
-                val token = if (task.isSuccessful) task.result else null
-                Log.d("LoginActivity", "FCM Token: $token")
+                val token = if (task.isSuccessful) {
+                    task.result
+                } else {
+                    Log.e("LoginActivity", "FCM token retrieval failed", task.exception)
+                    savedToken // Gunakan token tersimpan jika ada
+                }
+                
+                Log.d("LoginActivity", "FCM Token being sent: $token")
                 viewModel.login(email, password, token)
             }
         }

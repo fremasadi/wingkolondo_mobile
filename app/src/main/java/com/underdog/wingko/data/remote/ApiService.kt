@@ -59,4 +59,9 @@ interface ApiService {
         @Part foto: MultipartBody.Part,
         @Part("catatan") catatan: RequestBody? = null
     ): Response<Unit>
+
+    @POST("api/logout")
+    suspend fun logout(
+        @Header("Authorization") token: String
+    ): Response<Unit>
 }
