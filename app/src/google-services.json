@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "918259106702",
-    "project_id": "wingko-londo",
-    "storage_bucket": "wingko-londo.firebasestorage.app"
+    "project_number": "229940319742",
+    "project_id": "wingko-londo-5dba2",
+    "storage_bucket": "wingko-londo-5dba2.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:918259106702:android:26cc9c61192f0580335adf",
+        "mobilesdk_app_id": "1:229940319742:android:ed03866f1b56d4b5d09caf",
         "android_client_info": {
           "package_name": "com.underdog.wingko"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyCghLcvwg_80TWF4wdZm1aQsZVeU-HjRxo"
+          "current_key": "AIzaSyAUK4ZGKEJwvfZgPu5qUXfedM7k5SoVcU0"
         }
       ],
       "services": {
